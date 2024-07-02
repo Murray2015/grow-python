@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 import logging
 import math
 import pathlib
@@ -12,6 +13,7 @@ import ST7735
 import yaml
 from fonts.ttf import RobotoMedium as UserFont
 from PIL import Image, ImageDraw, ImageFont
+import paho.mqtt.client as mqtt
 
 from grow import Piezo
 from grow.moisture import Moisture
@@ -31,7 +33,6 @@ COLOR_GREEN = (99, 255, 124)
 COLOR_YELLOW = (254, 219, 82)
 COLOR_RED = (247, 0, 63)
 COLOR_BLACK = (0, 0, 0)
-
 
 # Only the ALPHA channel is used from these images
 icon_drop = Image.open("icons/icon-drop.png").convert("RGBA")
@@ -80,12 +81,12 @@ class View:
         self._image.paste(col, position, mask=icon)
 
     def label(
-        self,
-        position="X",
-        text=None,
-        bgcolor=(0, 0, 0),
-        textcolor=(255, 255, 255),
-        margin=4,
+            self,
+            position="X",
+            text=None,
+            bgcolor=(0, 0, 0),
+            textcolor=(255, 255, 255),
+            margin=4,
     ):
         if position not in ["A", "B", "X", "Y"]:
             raise ValueError(f"Invalid label position {position}")
@@ -116,7 +117,8 @@ class View:
         self._draw.rectangle(
             (0, top, DISPLAY_WIDTH, DISPLAY_HEIGHT), fill=(192, 225, 254)
         )  # Overlay backdrop
-        self._draw.rectangle((0, top, DISPLAY_WIDTH, top + 1), fill=COLOR_BLUE)  # Top border
+        self._draw.rectangle((0, top, DISPLAY_WIDTH, top + 1),
+                             fill=COLOR_BLUE)  # Top border
         self.text_in_rect(
             text,
             self.font,
@@ -142,8 +144,8 @@ class View:
                 line = []
 
                 while (
-                    len(words) > 0
-                    and font.getsize(" ".join(line + [words[0]]))[0] <= width
+                        len(words) > 0
+                        and font.getsize(" ".join(line + [words[0]]))[0] <= width
                 ):
                     line.append(words.pop(0))
 
@@ -207,7 +209,8 @@ class MainView(View):
         if active:
             # Draw background bars
             self._draw.rectangle(
-                (x, int((1.0 - saturation) * DISPLAY_HEIGHT), x + bar_width - 1, DISPLAY_HEIGHT),
+                (x, int((1.0 - saturation) * DISPLAY_HEIGHT), x + bar_width - 1,
+                 DISPLAY_HEIGHT),
                 channel.indicator_color(saturation) if active else (229, 229, 229),
             )
 
@@ -219,7 +222,8 @@ class MainView(View):
         # Channel selection icons
         x += (bar_width - label_width) // 2
 
-        self.icon(icon_channel, (x, label_y), (200, 200, 200) if active else (64, 64, 64))
+        self.icon(icon_channel, (x, label_y),
+                  (200, 200, 200) if active else (64, 64, 64))
 
         # TODO: replace number text with graphic
         tw, th = self.font.getsize(str(channel.channel))
@@ -428,13 +432,17 @@ class DetailView(ChannelView):
 
             self.draw_status((graph_x, graph_y + graph_height + 4))
 
-            self._draw.rectangle((graph_x, graph_y, graph_x + graph_width, graph_y + graph_height), (50, 50, 50))
+            self._draw.rectangle(
+                (graph_x, graph_y, graph_x + graph_width, graph_y + graph_height),
+                (50, 50, 50))
 
             for x, value in enumerate(self.channel.sensor.history[:graph_width]):
                 color = self.channel.indicator_color(value)
                 h = value * graph_height
                 x = graph_x + graph_width - x - 1
-                self._draw.rectangle((x, graph_y + graph_height - h, x + 1, graph_y + graph_height), color)
+                self._draw.rectangle(
+                    (x, graph_y + graph_height - h, x + 1, graph_y + graph_height),
+                    color)
 
             alarm_line = int(self.channel.warn_level * graph_height)
             r = 255
@@ -586,7 +594,7 @@ class ChannelEditView(ChannelView, EditView):
                 "max": 1.0,
                 "mode": "float",
                 "round": 2,
-                "format": lambda value: f"{value*100:0.0f}%",
+                "format": lambda value: f"{value * 100:0.0f}%",
                 "help": "Speed of pump"
             },
             {
@@ -623,21 +631,21 @@ class Channel:
     ]
 
     def __init__(
-        self,
-        display_channel,
-        sensor_channel,
-        pump_channel,
-        title=None,
-        water_level=0.5,
-        warn_level=0.5,
-        pump_speed=0.5,
-        pump_time=0.2,
-        watering_delay=60,
-        wet_point=0.7,
-        dry_point=26.7,
-        icon=None,
-        auto_water=False,
-        enabled=False,
+            self,
+            display_channel,
+            sensor_channel,
+            pump_channel,
+            title=None,
+            water_level=0.5,
+            warn_level=0.5,
+            pump_speed=0.5,
+            pump_time=0.2,
+            watering_delay=60,
+            wet_point=0.7,
+            dry_point=26.7,
+            icon=None,
+            auto_water=False,
+            enabled=False,
     ):
         self.channel = display_channel
         self.sensor = Moisture(sensor_channel)
@@ -699,7 +707,9 @@ class Channel:
         b = a + 1
         blend = float(value - a)
 
-        r, g, b = [int(((self.colors[b][i] - self.colors[a][i]) * blend) + self.colors[a][i]) for i in range(3)]
+        r, g, b = [
+            int(((self.colors[b][i] - self.colors[a][i]) * blend) + self.colors[a][i])
+            for i in range(3)]
 
         return (r, g, b)
 
@@ -800,10 +810,10 @@ class Alarm(View):
             self._sleep_until = None
 
         if (
-            self.enabled
-            and not lights_out
-            and self._triggered
-            and time.time() - self._time_last_beep > self.interval
+                self.enabled
+                and not lights_out
+                and self._triggered
+                and time.time() - self._time_last_beep > self.interval
         ):
             self.piezo.beep(self.beep_frequency, 0.1, blocking=False)
             threading.Timer(
@@ -825,7 +835,7 @@ class Alarm(View):
     def render(self, position=(0, 0)):
         x, y = position
         # Draw the snooze icon- will be pulsing red if the alarm state is True
-        #self._draw.rectangle((x, y, x + 19, y + 19), (255, 255, 255))
+        # self._draw.rectangle((x, y, x + 19, y + 19), (255, 255, 255))
         r = 129
         if self._triggered and self._sleep_until is None:
             r = int(((math.sin(time.time() * 3 * math.pi) + 1.0) / 2.0) * 128) + 127
@@ -938,6 +948,11 @@ class Config:
             "alarm_interval",
         ]
 
+        self.mqtt_settings = [
+            "server",
+            "topics"
+        ]
+
     def load(self, settings_file="settings.yml"):
         if len(sys.argv) > 1:
             settings_file = sys.argv[1]
@@ -972,6 +987,9 @@ class Config:
     def get_channel(self, channel_id):
         return self.config.get("channel{}".format(channel_id), {})
 
+    def get_mqtt(self):
+        return self.config.get("mqtt")
+
     def set(self, section, settings):
         if isinstance(settings, dict):
             self.config[section].update(settings)
@@ -989,6 +1007,140 @@ class Config:
 
     def set_general(self, settings):
         self.set("general", settings)
+
+
+class MqttController:
+    def __init__(
+            self,
+            channels,
+            enabled=False,
+            mqtt_host="",
+            mqtt_port=1883,
+            mqtt_tls=False,
+            mqtt_client_id="",
+            mqtt_username=None,
+            mqtt_password=None,
+            mqtt_debug=False,
+            mqtt_keepalive=60,
+            mqtt_topic_root="plants/moisture",
+            mqtt_qos=2,
+            mqtt_interval=60
+    ):
+        self.channels = channels
+        self._enabled = enabled
+        self.mqtt_host = mqtt_host
+        self.mqtt_port = mqtt_port
+        self.mqtt_tls = mqtt_tls
+        self.mqtt_client_id = mqtt_client_id
+        self.mqtt_username = mqtt_username
+        self.mqtt_password = mqtt_password
+        self.mqtt_debug = mqtt_debug
+        self.mqtt_keepalive = mqtt_keepalive
+        self.mqtt_topic_root = mqtt_topic_root
+        self.mqtt_interval = mqtt_interval
+        self.mqtt_qos = mqtt_qos
+        self._connected = False
+        self._connecting = False
+        self._time_last_pub = time.time()
+
+    def update_from_yml(self, config):
+        if config is not None:
+            self._enabled = True
+            self.mqtt_host = config.get("mqtt_host", self.mqtt_host)
+            self.mqtt_port = config.get("mqtt_port", self.mqtt_port)
+            self.mqtt_tls = config.get("mqtt_tls", self.mqtt_tls)
+            self.mqtt_client_id = config.get("mqtt_client_id", self.mqtt_client_id)
+            self.mqtt_username = config.get("mqtt_username", self.mqtt_username)
+            self.mqtt_password = config.get("mqtt_password", self.mqtt_password)
+            self.mqtt_debug = config.get("mqtt_debug", self.mqtt_debug)
+            self.mqtt_keepalive = config.get("mqtt_keepalive", self.mqtt_keepalive)
+            self.mqtt_topic_root = config.get("mqtt_topic_root", self.mqtt_topic_root)
+            self.mqtt_qos = config.get("mqtt_qos", self.mqtt_qos)
+            self.mqtt_interval = config.get("mqtt_interval", self.mqtt_interval)
+        else:
+            self._enabled = False
+
+    def on_connect(self, mqttc, obj, flags, rc):
+        self._connected = True
+        logging.debug(f'mqtt_connect: RC: {rc}')
+
+    def on_message(self, mqttc, obj, msg):
+        logging.debug(
+            f'mqtt_message: Topic: {msg.topic}, QOS: {msg.qos}, Payload: {msg.payload}')
+
+    def on_publish(self, mqttc, obj, mid):
+        logging.debug(f'mqtt_publish: MID: {mid}')
+
+    def on_subscribe(self, mqttc, obj, mid, granted_qos):
+        logging.debug(f'mqtt_subscribe: MID: {mid}, Granted QoS: {granted_qos}')
+
+    def on_log(self, mqttc, obj, level, string):
+        logging.debug(f'mqtt_log: {string}')
+
+    def connect(self):
+        if self._enabled:
+            self.connecting = True
+            self.mqttc = mqtt.Client()
+            # -- TODO - Add MQTT TLS Configuration
+            # if self.mqtt_tls:
+            # if usetls:
+            # if args.tls_version == "tlsv1.2":
+            # tlsVersion = ssl.PROTOCOL_TLSv1_2
+            # elif args.tls_version == "tlsv1.1":
+            # tlsVersion = ssl.PROTOCOL_TLSv1_1
+            # elif args.tls_version == "tlsv1":
+            # tlsVersion = ssl.PROTOCOL_TLSv1
+            # elif args.tls_version is None:
+            # tlsVersion = None
+            # else:
+            # print ("Unknown TLS version - ignoring")
+            # tlsVersion = None
+            #
+            # if not args.insecure:
+            #    cert_required = ssl.CERT_REQUIRED
+            # else:
+            #    cert_required = ssl.CERT_NONE
+            #
+            # mqttc.tls_set(ca_certs=args.cacerts, certfile=None, keyfile=None, cert_reqs=cert_required, tls_version=tlsVersion)
+            #
+            # if args.insecure:
+            #    mqttc.tls_insecure_set(True)
+
+            if self.mqtt_username or self.mqtt_password:
+                self.mqttc.username_pw_set(self.mqtt_username, self.mqtt_password)
+
+            self.mqttc.on_message = self.on_message
+            self.mqttc.on_connect = self.on_connect
+            self.mqttc.on_publish = self.on_publish
+            self.mqttc.on_subscribe = self.on_subscribe
+
+            if self.mqtt_debug:
+                self.mqttc.on_log = self.on_log
+
+            logging.debug(f'mqtt: Connecting to: {self.mqtt_host}:{self.mqtt_port}')
+            rc = self.mqttc.connect(self.mqtt_host, self.mqtt_port, self.mqtt_keepalive)
+            logging.debug("mqtt Connect RC: " + str(rc))
+            # self.mqttc.loop_start()
+            self._connecting = False
+
+    def disconnect(self):
+        self.mqttc.disconnect()
+
+    def update(self):
+        if self._enabled:
+            self.mqttc.loop()
+            if time.time() - self._time_last_pub > self.mqtt_interval:
+                moistureDict = {}
+                for channel in self.channels:
+                    moistureDict[
+                        f'channel{channel.channel}'] = channel.sensor.saturation * 100
+
+                value = json.dumps(moistureDict)
+                logging.info(
+                    f'mqtt: Publishing: {value} to {self.mqtt_topic_root} at QoS: {self.mqtt_qos}')
+                self.mqttc.publish(self.mqtt_topic_root, value, qos=self.mqtt_qos)
+
+                self._time_last_pub = time.time()
 
 
 def main():
@@ -1013,7 +1165,6 @@ def main():
         if label == "Y":
             viewcontroller.button_y()
 
-
     # Set up the ST7735 SPI Display
     display = ST7735.ST7735(
         port=0, cs=1, dc=9, backlight=12, rotation=270, spi_speed_hz=80000000
@@ -1028,7 +1179,6 @@ def main():
 
     # Setup blank image for darkness
     image_blank = Image.new("RGBA", (DISPLAY_WIDTH, DISPLAY_HEIGHT), color=(0, 0, 0))
-
 
     # Pick a random selection of plant icons to display on screen
     channels = [
@@ -1115,6 +1265,10 @@ Low Light Value {:.2f}
         ]
     )
 
+    mqttController = MqttController(channels)
+    mqttController.update_from_yml(config.get_mqtt())
+    mqttController.connect()
+
     while True:
         for channel in channels:
             config.set_channel(channel.channel, channel)
@@ -1127,6 +1281,7 @@ Low Light Value {:.2f}
         alarm.update(light_level_low)
 
         viewcontroller.update()
+        mqttController.update()
 
         if light_level_low and config.get_general().get("black_screen_when_light_low"):
             display.sleep()

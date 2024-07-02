@@ -84,3 +84,28 @@ An additional `general` section can be used for global settings:
 
 * `alarm_enable` - Whether to enable the alarm
 * `alarm_interval` - The interval at which the alarm should beep (in seconds)
+
+## MQTT Settings 
+MQTT is used to broadcast the moisture values read by the sensors to an external MQTT server. This could be used to write to a database, create an external dashboard, etc. 
+
+```yaml
+
+mqtt: 
+  mqtt_host: localhost 
+  mqtt_port: 1883
+  mqtt_client_id: plantMonitor 
+  mqtt_username: plantpi
+  mqtt_password: pimeroni
+  mqtt_topic_root: plants/moisture
+  mqtt_pos: 2
+  mqtt_interval: 30
+
+```
+* `mqtt_host` - This is the hostname or IP address of the server where your MQTT broker is.
+* `mqtt_port` - This is the port number for the broker, usually `1883`.
+* `mqtt_client_id` - This is the Client ID for your monitor service, can be ignored if you dont mind what the broker sees this device as.
+* `mqtt_username` - If you have authentication enabled, this is the username.
+* `mqtt_password` - If you have authentication enabled, this is the password.
+* `mqtt_topic_root` - This is the MQTT topic where the sensor data will be sent.
+* `mqtt_qos` - The QoS Level to publish messages at. Default: `2`.
+* `mqtt_interval` - This is the time interval between publishing 
